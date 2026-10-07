@@ -50,11 +50,12 @@
   .kv b { font-weight: 600; }
   .quiet { font-variant-numeric: tabular-nums; }
   .quiet.warn { color: var(--amber); }
-  button {
+  button, a#export {
     background: var(--panel); color: var(--fg); border: 1px solid var(--line);
     border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer;
   }
   button.on { border-color: var(--green); color: var(--green); }
+  a#export { text-decoration: none; }
 
   h2 {
     font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
@@ -113,6 +114,7 @@
   <span class="spacer"></span>
   <span class="kv muted" id="conn">connecting</span>
   <button id="sound" type="button">sound off</button>
+  <a id="export" href="/api/export" download title="Bundle today's log + findings + network snapshot into one file to paste into Claude">export for Claude</a>
 </header>
 
 <h2>Devices</h2>

@@ -64,3 +64,11 @@ line after start-up is an event worth reading.
 - Sync gap threshold is 1 s. Dante devices tolerate short gaps; a logged gap is a
   symptom, not proof of an audible drop. Match it to the noted time.
 - PTP parsing is Dante's PTPv1 only (verified against a capture 2026-10-07).
+
+## Export for Claude
+
+`./export.sh` (or the **export for Claude** link in the live UI) writes one Markdown file to
+`exports/`: a ready-made diagnosis prompt, an operator-notes block to fill in (drop times, what
+was heard), a network snapshot at export time, FINDINGS.md, and the day's log with a summary.
+Fill in the notes, then paste or attach the file in a Claude conversation. `./export.sh 2026-10-05`
+exports a past day; several dates can be given.

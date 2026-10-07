@@ -194,9 +194,26 @@ class Handler(BaseHTTPRequestHandler):
                 return self.serve_events(parse_qs(url.query))
             if route == "/api/stream":
                 return self.serve_stream()
+            if route == "/api/export":
+                return self.serve_export()
             return self.send_text("not found", 404)
         except (BrokenPipeError, ConnectionResetError):
             pass
+
+    def serve_export(self):
+        """Run export.py and hand the Markdown back as a download."""
+        r = subprocess.run([sys.executable, str(INDEX.parent.parent / "export.py")],
+                           capture_output=True, text=True, timeout=60)
+        if r.returncode != 0:
+            return self.send_text("export failed:\n" + r.stderr, 500)
+        path = pathlib.Path(r.stdout.strip())
+        body = path.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/markdown; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def serve_index(self):
         try:
