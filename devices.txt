@@ -1,0 +1,7 @@
+# name=ip — seed list. Anything else seen on the segment is auto-added and logged as NEW.
+DM7C=169.254.157.163
+Rio-Y001=169.254.200.155
+Rio-Y002=169.254.102.101
+Reaperpc=169.254.209.236
+AdminMBP=169.254.73.20
+TPLink-switch=169.254.1.1
