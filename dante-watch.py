@@ -113,8 +113,10 @@ def main():
     discover(first=True)
     log("INFO", f"watching {len(devices)} devices")
     last_discover = time.time()
+    today = datetime.date.today()
     sock = ptp_socket(ip)
     master = None
+    master_src = None
     last_sync = time.time()
     gap_open = False
     last_ping = 0
@@ -129,7 +131,7 @@ def main():
                 now = time.time()
                 if uuid != master:
                     log("CLOCK", f"PTP master now {src} ({uuid})" + (f", was {master}" if master else ""))
-                    master = uuid
+                    master, master_src = uuid, src
                 if gap_open:
                     log("CLOCK", f"sync resumed after {now-last_sync:.1f}s")
                     gap_open = False
@@ -140,6 +142,13 @@ def main():
         if not gap_open and now - last_sync > GAP_S:
             log("CLOCK", f"no PTP sync for {now-last_sync:.1f}s (master {master})")
             gap_open = True
+        if datetime.date.today() != today:        # new day's log file: restate state so it stands alone
+            today = datetime.date.today()
+            log("INFO", f"start on {iface} {ip} link={last_link} (day rollover)")
+            for name, addr in devices.items():
+                log("INFO", f"device {name} {addr}")
+            if master:
+                log("CLOCK", f"PTP master now {master_src} ({master})")
         if now - last_discover >= DISCOVER_EVERY:
             last_discover = now; discover()
         # --- link + ping

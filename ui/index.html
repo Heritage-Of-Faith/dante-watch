@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dante-watch</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #171b22;
+    --line: #262c36;
+    --fg: #e6e9ee;
+    --dim: #8b93a1;
+    --green: #2ecc71;
+    --red: #ff4d4d;
+    --amber: #ffb224;
+    --blue: #4da3ff;
+    --grey: #8b93a1;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.4 -apple-system, "SF Mono", Menlo, Consolas, monospace;
+    padding: 12px 16px 32px;
+    transition: background .15s;
+  }
+  body.flash-red   { background: #4a1414; }
+  body.flash-amber { background: #4a3a10; }
+
+  h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .04em; }
+  .muted { color: var(--dim); }
+
+  header {
+    display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+    padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 12px;
+  }
+  header .spacer { flex: 1; }
+  .pill {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-weight: 700; font-size: 12px; letter-spacing: .06em;
+    background: var(--grey); color: #000;
+  }
+  .pill.run  { background: var(--green); }
+  .pill.stop { background: var(--red); color: #fff; }
+  .pill.noserver { background: var(--amber); }
+  .kv { white-space: nowrap; }
+  .kv b { font-weight: 600; }
+  .quiet { font-variant-numeric: tabular-nums; }
+  .quiet.warn { color: var(--amber); }
+  button {
+    background: var(--panel); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  button.on { border-color: var(--green); color: var(--green); }
+
+  h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--dim); margin: 14px 0 6px; font-weight: 600;
+  }
+
+  .grid {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+  .tile {
+    background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--grey);
+    border-radius: 6px; padding: 8px 10px; min-width: 0;
+  }
+  .tile.up   { border-left-color: var(--green); }
+  .tile.down { border-left-color: var(--red); background: #2a1515; }
+  .tile .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile .ip   { color: var(--dim); font-size: 12px; }
+  .tile.down .ip { color: #ffb3b3; }
+  .empty { color: var(--dim); font-style: italic; }
+
+  .counts { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; color: var(--dim); }
+  .counts span b { color: var(--fg); }
+
+  #feed { list-style: none; margin: 0; padding: 0; }
+  #feed li {
+    display: flex; gap: 8px; padding: 4px 6px; border-bottom: 1px solid var(--line);
+    border-left: 4px solid var(--grey); font-size: 13px; word-break: break-word;
+  }
+  #feed li .ts  { color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #feed li .lv  { width: 48px; flex: none; font-weight: 700; }
+  #feed li.CLOCK { border-left-color: var(--amber); } #feed li.CLOCK .lv { color: var(--amber); }
+  #feed li.PING  { border-left-color: var(--red); }   #feed li.PING  .lv { color: var(--red); }
+  #feed li.LINK  { border-left-color: var(--red); }   #feed li.LINK  .lv { color: var(--red); }
+  #feed li.ERROR { border-left-color: var(--red); }   #feed li.ERROR .lv { color: var(--red); }
+  #feed li.NEW   { border-left-color: var(--blue); }  #feed li.NEW   .lv { color: var(--blue); }
+  #feed li.INFO  { border-left-color: var(--grey); }  #feed li.INFO  .lv { color: var(--grey); }
+  #feed li.fresh { animation: pop .8s ease-out; }
+  @keyframes pop { from { background: #2b3340; } to { background: transparent; } }
+
+  @media (max-width: 480px) {
+    body { padding: 10px 16px 24px; }
+    #feed li .ts { font-size: 11px; }
+    header { gap: 6px 12px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>dante-watch</h1>
+  <span id="run" class="pill">...</span>
+  <span class="kv">master <b id="master">—</b></span>
+  <span class="kv">iface <b id="iface">—</b></span>
+  <span class="kv">last <b id="last">—</b></span>
+  <span class="kv quiet" id="quiet">quiet for — s</span>
+  <span class="spacer"></span>
+  <span class="kv muted" id="conn">connecting</span>
+  <button id="sound" type="button">sound off</button>
+</header>
+
+<h2>Devices</h2>
+<div id="devices" class="grid"><div class="empty">no devices yet</div></div>
+
+<h2>Events <span id="counts" class="counts" style="display:inline-flex;margin-left:8px"></span></h2>
+<ul id="feed"></ul>
+
+<script>
+(function () {
+  'use strict';
+  var FEED_CAP = 500;
+  var ALARM = { CLOCK: 'amber', PING: 'red', LINK: 'red' };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var el = {
+    run: $('run'), master: $('master'), iface: $('iface'), last: $('last'),
+    quiet: $('quiet'), conn: $('conn'), sound: $('sound'),
+    devices: $('devices'), counts: $('counts'), feed: $('feed')
+  };
+
+  var state = {
+    devices: {},          // name -> {ip, up}
+    master: null,
+    lastTs: null,         // ISO string of the most recent event
+    seen: {},             // dedupe key -> true
+    seenCount: 0,
+    feedCount: 0,
+    everConnected: false,
+    soundOn: false
+  };
+
+  // ---------- helpers ----------
+  function parseTs(ts) {
+    // Log timestamps are local-time ISO without a zone; Date() parses that as local.
+    if (!ts) return null;
+    var d = new Date(ts);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function hhmmss(ts) {
+    var d = parseTs(ts);
+    if (!d) return ts || '—';
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+  function bumpLast(ts) {
+    if (ts && (!state.lastTs || ts > state.lastTs)) {
+      state.lastTs = ts;
+      el.last.textContent = hhmmss(ts);
+    }
+  }
+  function keyOf(ev) { return (ev.ts || '').slice(0, 10) + '#' + ev.i; }
+  function remember(key) {
+    if (state.seen[key]) return false;
+    state.seen[key] = true;
+    if (++state.seenCount > 5000) { state.seen = {}; state.seenCount = 0; state.seen[key] = true; }
+    return true;
+  }
+
+  // ---------- header ----------
+  function setRunning(v) {
+    if (v === null) { el.run.textContent = 'NO SERVER'; el.run.className = 'pill noserver'; return; }
+    el.run.textContent = v ? 'RUNNING' : 'NOT RUNNING';
+    el.run.className = 'pill ' + (v ? 'run' : 'stop');
+  }
+  function setMaster(m) {
+    state.master = m || null;
+    el.master.textContent = state.master || '—';
+  }
+  function tickQuiet() {
+    var d = parseTs(state.lastTs);
+    if (!d) { el.quiet.textContent = 'quiet for — s'; el.quiet.className = 'kv quiet'; return; }
+    var s = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+    el.quiet.textContent = 'quiet for ' + s + ' s';
+    el.quiet.className = 'kv quiet' + (s < 10 ? ' warn' : '');
+  }
+  setInterval(tickQuiet, 1000);
+
+  // ---------- devices ----------
+  function renderDevices() {
+    var names = Object.keys(state.devices).sort();
+    if (!names.length) { el.devices.innerHTML = '<div class="empty">no devices yet</div>'; return; }
+    var frag = document.createDocumentFragment();
+    names.forEach(function (n) {
+      var d = state.devices[n];
+      var t = document.createElement('div');
+      t.className = 'tile ' + (d.up ? 'up' : 'down');
+      var name = document.createElement('div'); name.className = 'name'; name.textContent = n; name.title = n;
+      var ip = document.createElement('div'); ip.className = 'ip'; ip.textContent = (d.ip || '') + (d.up ? '' : '  DOWN');
+      t.appendChild(name); t.appendChild(ip); frag.appendChild(t);
+    });
+    el.devices.innerHTML = '';
+    el.devices.appendChild(frag);
+  }
+  function renderCounts(counts) {
+    var order = ['CLOCK', 'PING', 'LINK', 'NEW', 'ERROR', 'INFO'];
+    el.counts.innerHTML = '';
+    order.forEach(function (lv) {
+      if (!counts || counts[lv] == null) return;
+      var s = document.createElement('span');
+      s.innerHTML = lv.toLowerCase() + ' <b></b>';
+      s.querySelector('b').textContent = counts[lv];
+      el.counts.appendChild(s);
+    });
+  }
+
+  // Apply a single event to local state so the page reacts before the next status poll.
+  function applyToState(ev) {
+    var m;
+    if ((ev.level === 'INFO' || ev.level === 'NEW') && (m = /^device (\S+) (\S+)$/.exec(ev.msg))) {
+      if (!state.devices[m[1]]) state.devices[m[1]] = { ip: m[2], up: true };
+      else state.devices[m[1]].ip = m[2];
+      return true;
+    }
+    if (ev.level === 'PING' && (m = /^(\S+) (\S+) (unreachable|back)$/.exec(ev.msg))) {
+      if (!state.devices[m[1]]) state.devices[m[1]] = { ip: m[2], up: true };
+      state.devices[m[1]].up = (m[3] === 'back');
+      return true;
+    }
+    if (ev.level === 'CLOCK' && (m = /^PTP master now\s+(.+?)(?:,\s*was\b.*)?$/.exec(ev.msg))) {
+      setMaster(m[1].trim());   // "<ip> (<uuid>)", same shape as /api/status master
+    }
+    return false;
+  }
+
+  // ---------- feed ----------
+  function makeRow(ev, fresh) {
+    var li = document.createElement('li');
+    li.className = ev.level + (fresh ? ' fresh' : '');
+    var ts = document.createElement('span'); ts.className = 'ts'; ts.textContent = hhmmss(ev.ts); ts.title = ev.ts;
+    var lv = document.createElement('span'); lv.className = 'lv'; lv.textContent = ev.level;
+    var msg = document.createElement('span'); msg.className = 'msg'; msg.textContent = ev.msg;
+    li.appendChild(ts); li.appendChild(lv); li.appendChild(msg);
+    return li;
+  }
+  function trimFeed() {
+    while (el.feed.childNodes.length > FEED_CAP) el.feed.removeChild(el.feed.lastChild);
+  }
+  // events: array in file order (oldest first). Newest ends up at top.
+  function addEvents(events, live) {
+    var touched = false, alarm = null;
+    for (var k = 0; k < events.length; k++) {
+      var ev = events[k];
+      if (!ev || typeof ev.i !== 'number') continue;
+      if (!remember(keyOf(ev))) continue;
+      el.feed.insertBefore(makeRow(ev, live), el.feed.firstChild);
+      bumpLast(ev.ts);
+      if (applyToState(ev)) touched = true;
+      if (live && ALARM[ev.level]) alarm = (alarm === 'red') ? 'red' : ALARM[ev.level];
+    }
+    trimFeed();
+    if (touched) renderDevices();
+    if (alarm) bell(alarm);
+  }
+
+  // ---------- bell / flash ----------
+  var audioCtx = null;
+  function beep() {
+    if (!state.soundOn) return;
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'square'; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + 0.35);
+    } catch (e) { /* no audio available */ }
+  }
+  var flashTimer = null;
+  function bell(kind) {
+    document.body.classList.remove('flash-red', 'flash-amber');
+    void document.body.offsetWidth; // restart transition
+    document.body.classList.add('flash-' + kind);
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(function () { document.body.classList.remove('flash-red', 'flash-amber'); }, 700);
+    beep();
+    if (navigator.vibrate) { try { navigator.vibrate(kind === 'red' ? [120, 60, 120] : 120); } catch (e) {} }
+  }
+  function setSound(on) {
+    state.soundOn = !!on;
+    el.sound.textContent = state.soundOn ? 'sound on' : 'sound off';
+    el.sound.className = state.soundOn ? 'on' : '';
+    try { localStorage.setItem('dw.sound', state.soundOn ? '1' : '0'); } catch (e) {}
+  }
+  el.sound.addEventListener('click', function () {
+    setSound(!state.soundOn);
+    if (state.soundOn) beep();   // user gesture unlocks the AudioContext on iOS
+  });
+  try { setSound(localStorage.getItem('dw.sound') === '1'); } catch (e) { setSound(false); }
+
+  // ---------- API ----------
+  function getJSON(url) {
+    return fetch(url, { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error(url + ' ' + r.status);
+      return r.json();
+    });
+  }
+  function fetchStatus() {
+    return getJSON('/api/status').then(function (s) {
+      setRunning(!!s.running);
+      setMaster(s.master);
+      el.iface.textContent = s.iface || '—';
+      bumpLast(s.last_event_ts);
+      if (s.devices && typeof s.devices === 'object') {
+        var merged = {};
+        Object.keys(s.devices).forEach(function (n) {
+          var d = s.devices[n] || {};
+          merged[n] = { ip: d.ip || '', up: d.up !== false };
+        });
+        state.devices = merged;   // server is authoritative
+        renderDevices();
+      }
+      renderCounts(s.counts);
+    }).catch(function () {
+      setRunning(null);
+    });
+  }
+  function fetchEvents() {
+    // No "since": server returns the last 200 lines of today's file.
+    // Dedupe by (date, index) so this is safe after reconnects and midnight rollover.
+    return getJSON('/api/events').then(function (r) {
+      addEvents(r.events || [], false);
+    }).catch(function () {});
+  }
+
+  var es = null;
+  function connectStream() {
+    if (es) { try { es.close(); } catch (e) {} }
+    es = new EventSource('/api/stream');
+    es.onopen = function () {
+      el.conn.textContent = 'live';
+      el.conn.style.color = '';
+      if (state.everConnected) {
+        // Reconnect: re-sync. Status first, then backfill anything missed while down.
+        fetchStatus().then(fetchEvents);
+      }
+      state.everConnected = true;
+    };
+    es.onmessage = function (m) {
+      var ev;
+      try { ev = JSON.parse(m.data); } catch (e) { return; }
+      addEvents([ev], true);
+    };
+    es.onerror = function () {
+      el.conn.textContent = 'reconnecting';
+      el.conn.style.color = 'var(--amber)';
+      // EventSource retries on its own. If the browser gave up (CLOSED), start over.
+      if (es.readyState === 2) setTimeout(connectStream, 3000);
+    };
+  }
+
+  // ---------- boot ----------
+  fetchStatus().then(fetchEvents).then(function () {
+    connectStream();
+    tickQuiet();
+  });
+  setInterval(fetchStatus, 10000);
+})();
+</script>
+</body>
+</html>

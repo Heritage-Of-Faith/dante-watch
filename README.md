@@ -27,6 +27,15 @@ Needs: a Mac with a USB Ethernet adapter, admin password for that Mac, Python 3
    file `log/YYYY-MM-DD.log`) to Matt.
 7. `./stop.sh` when done. `./status.sh` any time to check it is still running.
 
+## Live UI
+
+`./ui.sh` starts a small web page (no sudo, no installs) and opens http://localhost:8787.
+It shows RUNNING / NOT RUNNING, the current PTP master, a tile per device (green up,
+red down), and the day's events as they happen, newest at top. The page flashes on any
+CLOCK / PING / LINK line. To watch from a phone, use the second URL `ui.sh` prints —
+that only works if the Mac's Wi-Fi is on and the phone is on the same Wi-Fi. The Dante
+LAN itself has no Wi-Fi and no internet; the page needs neither.
+
 ## What the log lines mean
 
 | Line | Meaning | Points at |
